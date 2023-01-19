@@ -26,7 +26,10 @@ async def regulars(ctx):
     await ctx.respond(embed=embed)
 
 @bot.slash_command(name="quote", description="Get a random quote from a regular")
-async def quote(ctx: discord.ApplicationContext, regular: discord.Option(str, autocomplete=discord.utils.basic_autocomplete(regs))):
+async def quote(
+    ctx: discord.ApplicationContext, 
+    regular: discord.Option(str, autocomplete=discord.utils.basic_autocomplete(regs))
+):
     if regular in regs:
         Quote = Query()
         results = db.search(Quote.name == regular)
@@ -34,6 +37,19 @@ async def quote(ctx: discord.ApplicationContext, regular: discord.Option(str, au
         embed=discord.Embed(title=q['name'], description=q['quote'], color=bot_color)
     else:
         embed=discord.Embed(title="Nope!", description=f"{regular} is not a regular!", color=bot_color)
+    await ctx.respond(embed=embed)
+
+@bot.slash_command(name="quoteadd", description="Add a quote said by a regular")
+async def quoteadd(
+    ctx: discord.ApplicationContext, 
+    regular: discord.Option(str, autocomplete=discord.utils.basic_autocomplete(regs)),
+    quote: str
+):
+    if regular in regs:
+        db.insert({'name': regular, 'quote': quote })
+        embed=discord.Embed(title=regular, description=f"{regular}'s quote was added!", color=bot_color)
+    else:
+        embed=discord.Embed(title=regular, description=f"{regular}'s is not a regular!", color=bot_color)
     await ctx.respond(embed=embed)
 
 @bot.command(name="ping", description="Sends the bot's latency.") 
