@@ -4,6 +4,9 @@ import json
 import discord
 import asyncpraw
 import pytumblr
+import yfinance
+import tweepy
+import yweather
 
 from typing import Literal
 from datetime import date
@@ -27,6 +30,18 @@ db = TinyDB('avbot.json')
 
 #List of regulars
 regs = ['avdrav', 'aya', 'dol', 'robot', 'toc', 'virtue', 'starsmash', 'ina', 'crash', 'quin', 'soupy']
+
+#Build WOEID Map
+places_map = {}
+woeid_file = open('woeid.json')
+woeid_data = json.load(woeid_file)
+places = woeid_data
+for p in places:
+    key = (p['name']).upper()
+    value = p['woeid']
+    places_map[key] = value
+#print(places_map['UNITED STATES'])
+
 
 #Initialize bot
 @bot.event
@@ -192,6 +207,48 @@ async def tumblr(
     else:
         await ctx.respond(f"Could not find blog: {tumblr_blog}")
 
+@bot.slash_command(name="finance", description="Get the latest stock info")
+@option("stock", str, description="Enter a stock symbol")
+async def finance(
+    ctx: discord.ApplicationContext, 
+    stock: str,
+):
+    s = yfinance.Ticker(stock)
+    print(json.dumps(s.info, indent=4))
+    if s is not None:
+        price = "${:,.2f}".format(s.info["currentPrice"])
+        marketcap = "${:,.0f}".format(s.info["marketCap"])
+        await ctx.respond(f"{stock} Stock Price: {price}")
+        await ctx.respond(f"{stock} Market Cap: {marketcap}")
+
+@bot.slash_command(name="twitter", description="Get the latest headlines")
+@option("location", str, description="Enter the place to find trends")
+@option("num_trends", int, description="Enter the number of trends to retrieve")
+async def twitter(
+    ctx: discord.ApplicationContext,
+    location: str = 'United States', 
+    num_trends: int = 10
+):
+    auth = tweepy.OAuth2BearerHandler(os.getenv("TWITTER_TOKEN"))
+    api = tweepy.API(auth)
+        
+    count = 1
+    if location.upper() in places_map:
+        location_woeid = places_map[location.upper()]
+    
+        trends = api.get_place_trends(location_woeid)
+        for t in trends:
+            await ctx.respond(f"Getting the top {num_trends} trends from {location} on twitter!")
+            for h in t["trends"]:
+                embed=discord.Embed(title=h['name'], url=h['url'])
+                print(h['name'])
+                print(h['url'])
+                await ctx.send(embed=embed)
+                count = count + 1
+                if count > num_trends:
+                    break
+    else:
+        await ctx.respond(f"Could not find place: {location}")
 
 #Tasks
 @tasks.loop(seconds=60)
