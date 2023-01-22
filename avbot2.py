@@ -139,11 +139,11 @@ async def news(
     totalResults = top_headlines["totalResults"]
     count = 1
     if totalResults > 0:   
-        #await ctx.send(f'Total Headlines: {totalResults}')
+        await ctx.respond(f'Total Headlines: {totalResults}')
         json_headlines = json.loads(json.dumps(top_headlines["articles"]))
         for h in json_headlines:
             print(h)
-            await ctx.respond(h["url"])
+            await ctx.send(h["url"])
             count = count + 1
             if count > num_stories:
                 break
@@ -216,10 +216,27 @@ async def finance(
     s = yfinance.Ticker(stock)
     print(json.dumps(s.info, indent=4))
     if s is not None:
-        price = "${:,.2f}".format(s.info["currentPrice"])
-        marketcap = "${:,.0f}".format(s.info["marketCap"])
-        await ctx.respond(f"{stock} Stock Price: {price}")
-        await ctx.respond(f"{stock} Market Cap: {marketcap}")
+        print(json.dumps(s.info, indent=4))
+        if s.info['quoteType'] == "EQUITY":
+            price = "${:,.2f}".format(s.info["currentPrice"])
+            marketcap = "${:,.0f}".format(s.info["marketCap"])
+            summary = s.info["longBusinessSummary"]
+            embed=discord.Embed(title=f"{stock}", url=f"https://cnbc.com/quotes/{stock}",description=f"{summary}", color=bot_color)
+            embed.add_field(name=f"Stock Price", value=f"{price}", inline=True)
+            embed.add_field(name=f"Market Capitalization", value=f"{marketcap}", inline=True)
+            await ctx.respond(embed=embed)
+        elif s.info['quoteType'] == "ETF":
+            price = "${:,.2f}".format(s.info["regularMarketPrice"])
+            totalassets = "${:,.0f}".format(s.info["totalAssets"])
+            summary = s.info['longBusinessSummary']
+            embed=discord.Embed(title=f"{stock}", url=f"https://cnbc.com/quotes/{stock}",description=f"{summary}", color=bot_color)
+            embed.add_field(name=f"ETF Price", value=f"{price}", inline=True)
+            embed.add_field(name=f"Total Assets", value=f"{totalassets}", inline=True)
+            await ctx.respond(embed=embed)
+        else:
+            await ctx.respond(f"No information for {stock}!")
+    else:
+        await ctx.respond(f"No information for {stock}!")
 
 @bot.slash_command(name="twitter", description="Get the latest headlines")
 @option("location", str, description="Enter the place to find trends")
@@ -227,7 +244,7 @@ async def finance(
 async def twitter(
     ctx: discord.ApplicationContext,
     location: str = 'United States', 
-    num_trends: int = 10
+    num_trends: int = 3
 ):
     auth = tweepy.OAuth2BearerHandler(os.getenv("TWITTER_TOKEN"))
     api = tweepy.API(auth)
@@ -235,20 +252,38 @@ async def twitter(
     count = 1
     if location.upper() in places_map:
         location_woeid = places_map[location.upper()]
-    
         trends = api.get_place_trends(location_woeid)
         for t in trends:
-            await ctx.respond(f"Getting the top {num_trends} trends from {location} on twitter!")
-            for h in t["trends"]:
-                embed=discord.Embed(title=h['name'], url=h['url'])
+            embed=discord.Embed(title="Twitter Trends", description=f"Getting the top {num_trends} trends from {location} on twitter!", color=bot_color)
+            #await ctx.respond(f"")
+            for h in t["trends"]:          
+                print(h)
+                embed.add_field(name=f"{h['tweet_volume']} Tweets", value=f'[{h["name"]}]({h["url"]})', inline=True)
                 print(h['name'])
                 print(h['url'])
-                await ctx.send(embed=embed)
                 count = count + 1
                 if count > num_trends:
                     break
+        await ctx.respond(embed=embed)
     else:
         await ctx.respond(f"Could not find place: {location}")
+
+@bot.slash_command(name="tweets", description="Get the latest headlines")
+@option("handle", str, description="Enter a twitter handle")
+@option("num_tweets", int, description="Enter the number of tweets to retrieve")
+async def tweets(
+    ctx: discord.ApplicationContext,
+    handle: str, 
+    num_tweets: int = 3
+):
+    auth = tweepy.OAuth2BearerHandler(os.getenv("TWITTER_TOKEN"))
+    api = tweepy.API(auth)
+
+    tweets_list = api.user_timeline(screen_name=handle, count=num_tweets)
+    for tweet in tweets_list:
+        #print(json.dumps(tweet._json, indent=4))
+        print(tweet._json["text"])
+        await ctx.send(f"{tweet._json['text']}")
 
 #Tasks
 @tasks.loop(seconds=60)
